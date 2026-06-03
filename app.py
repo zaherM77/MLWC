@@ -232,7 +232,7 @@ def _bar3d_mesh(x, y, dz, color, name):
 
 def _render_3d_podium(top: pd.DataFrame):
     """Rotatable 3D bar chart of the top contenders (an optional alt view)."""
-    st.caption("Drag to rotate · scroll to zoom — taller, pinker bars are the bigger title shouts.")
+    st.caption("Drag to rotate · scroll to zoom, taller, pinker bars are the bigger title shouts.")
     chart = top.head(12).reset_index(drop=True)
     wins = (chart["win"] * 100).tolist()
     teams = chart["team"].tolist()
@@ -320,13 +320,28 @@ def _render_round(rnd: dict):
     )
 
 
-def _render_champion(cup: dict):
+def _render_champion(cup: dict, note: str = ""):
     """Render the celebratory champion banner (escaped names)."""
+    sub = f'Runner-up: {_esc(cup["runner_up"])}'
+    if note:
+        sub += f' &middot; {_esc(note)}'
     st.markdown(
         f'<div class="wc-champion"><div class="wc-champ-label">Champion</div>'
         f'<div class="wc-champ-name">{_esc(cup["champion"])}</div>'
-        f'<div class="wc-champ-sub">Runner-up: {_esc(cup["runner_up"])}</div></div>',
+        f'<div class="wc-champ-sub">{sub}</div></div>',
         unsafe_allow_html=True,
+    )
+
+
+def _loader_html(stage: str, pct: int) -> str:
+    """Markup for the animated 'playing the tournament' loader (static labels)."""
+    return (
+        '<div class="wc-loader">'
+        '<div class="wc-ball-wrap"><div class="wc-ball">⚽</div></div>'
+        f'<div class="wc-loader-stage">{_esc(stage)}</div>'
+        f'<div class="wc-loader-track"><div class="wc-loader-fill" '
+        f'style="width:{int(pct)}%"></div></div>'
+        '</div>'
     )
 
 
@@ -363,16 +378,15 @@ def _render_thirds(cup: dict):
 
 
 def _animate_cup(cup: dict):
-    """Stream the 'simulation in progress' steps for an interactive reveal."""
-    with st.status("Kicking off the tournament…", expanded=True) as status:
-        st.write("⚽ **Group stage** — 12 groups, 72 matches played")
+    """Play an animated loader (spinning ball + filling bar) through the stages."""
+    stages = ["Kicking off: group stage", "Round of 32", "Round of 16",
+              "Quarter-finals", "Semi-finals", "The Final"]
+    ph = st.empty()
+    total = len(stages)
+    for k, label in enumerate(stages, 1):
+        ph.markdown(_loader_html(label, int(k / total * 100)), unsafe_allow_html=True)
         time.sleep(0.5)
-        for rnd in cup["knockout"]:
-            n = len(rnd["matches"])
-            st.write(f"🥅 **{rnd['round']}** — {n} tie{'s' if n > 1 else ''} decided")
-            time.sleep(0.42)
-        status.update(label="Full-time — we have a champion! 🏆",
-                      state="complete", expanded=False)
+    ph.empty()
 
 
 def page_play():
@@ -383,7 +397,7 @@ def page_play():
 
     st.markdown("## ⚽ Play out a World Cup")
     st.write(
-        "Simulate one full tournament — every group, every knockout tie, one "
+        "Simulate one full tournament: every group, every knockout tie, one "
         "champion. Each run is **independent and random**, so you'll usually get "
         "a different winner. (Spain are favourites, but they win only ~1 in 4.)"
     )
@@ -391,11 +405,16 @@ def page_play():
         _render_groups_overview()
 
     c1, c2 = st.columns([1, 1])
+    # Render + handle "Kick off" first so that, the moment a cup exists, the
+    # "Play another" button next to it is already enabled (same run).
     play = c1.button("⚽ Kick off a tournament", type="primary", width="stretch")
+    if play:
+        _track_click()
+        st.session_state["cup"] = simulate.play_tournament(engine=load_engine())
+        st.session_state["cup_animate"] = True
     again = c2.button("🔄 Play another", width="stretch",
                       disabled="cup" not in st.session_state)
-
-    if play or again:
+    if again:
         _track_click()
         st.session_state["cup"] = simulate.play_tournament(engine=load_engine())
         st.session_state["cup_animate"] = True
@@ -409,7 +428,21 @@ def page_play():
         _animate_cup(cup)
         st.balloons()
 
-    _render_champion(cup)
+    # Contextualise the winner by their pre-tournament strength rank, so a
+    # surprise champion reads as the upset it is rather than a glitch.
+    eng = load_engine()
+    ranks = {t: r for r, t in enumerate(
+        sorted(eng.teams, key=lambda t: eng.elo[eng.idx[t]], reverse=True), 1)}
+    cr = ranks.get(cup["champion"])
+    if cr is None:
+        note = ""
+    elif cr <= 5:
+        note = f"the #{cr} side by rating: Reasonable champions"
+    elif cr <= 12:
+        note = f"the #{cr} side by rating: a fine run"
+    else:
+        note = f"the #{cr} side by rating: a major surprise!"
+    _render_champion(cup, note)
     st.markdown("### 🏟️ Knockout bracket")
     for rnd in cup["knockout"]:
         _render_round(rnd)
@@ -430,7 +463,7 @@ def page_odds():
     st.write(
         "Run thousands of independent tournaments and watch the championship "
         "probabilities **converge live**. The averaged picture favours the "
-        "strongest teams — but even the top side wins only a minority of the time."
+        "strongest teams, but even the top side wins only a minority of the time."
     )
     n = st.slider("Tournaments to simulate", 1_000, 20_000, 5_000, 1_000)
     run = st.button("📊 Run the simulation", type="primary")
@@ -502,7 +535,7 @@ def page_match():
     m2.metric("Draw", f"{p_draw * 100:.1f}%")
     m3.metric(f"{team_b} win", f"{p_b * 100:.1f}%")
     st.caption(
-        f"Expected goals — {team_a}: **{lam:.2f}**, {team_b}: **{mu:.2f}**"
+        f"Expected goals: {team_a}: **{lam:.2f}**, {team_b}: **{mu:.2f}**"
         + ("  ·  neutral venue" if neutral else f"  ·  {team_a} at home")
     )
 
@@ -532,7 +565,7 @@ def page_how():
 dataset), cleaned and normalised.
 
 **Elo ratings.** Each team carries a strength rating updated chronologically
-after every match — scaled by margin of victory (log-dampened), weighted by
+after every match, scaled by margin of victory (log-dampened), weighted by
 match importance, and given a home bonus off neutral ground. Ratings are strictly
 point-in-time (no look-ahead).
 
@@ -543,24 +576,29 @@ Dixon-Coles bivariate Poisson is kept as a baseline.
 
 **Simulation.** A tournament is played by sampling every scoreline, applying the
 FIFA 2026 tiebreakers, taking the top two plus the eight best third-placed teams,
-and running the knockout rounds with extra time and shootouts.
+and running the knockout rounds with extra time and penalty shootouts. The three
+co-hosts, **USA, Canada and Mexico**, play their matches at **home** (home
+advantage); every other tie is **neutral**.
         """
     )
 
-    st.markdown("### 🤔 Why do the odds always show Spain on top?")
+    st.markdown("### 🤔 Why did an outsider just win, and why is Spain always top of the odds?")
     st.info(
-        "The **Title odds** page averages over thousands of tournaments, and Spain "
-        "are the strongest team — so they top the *average*. But they still win only "
-        "about a quarter of the time. Any **single** tournament (the *Play out a "
-        "World Cup* page) is random and frequently crowns someone else. Aggregate "
-        "odds answer 'who's most likely overall'; a single play answers 'what could "
-        "happen this time'."
+        "Both come from the same fact: **football is high-variance**. A single knockout "
+        "tie is close to a coin flip between well-matched sides, and a champion must win "
+        "seven in a row, so even the favourite lifts the trophy only ~1 in 4 times, and "
+        "a mid-ranked side will occasionally go all the way (exactly as real World Cups "
+        "throw up surprise runs). The **Title odds** page averages thousands of "
+        "tournaments, so the strongest teams rise to the top of the *average*; a single "
+        "**Play a Cup** run shows *one* of those possible worlds. If you keep seeing "
+        "upsets, run more tournaments on the Title odds page, the long-run picture is "
+        "the calibrated one."
     )
 
     st.markdown("### 📏 Time-based backtest")
     st.markdown(
         "Models are trained on matches **before 2022** and scored on the unseen "
-        "**2022+** holdout — never a random split. Lower is better; **RPS** is the "
+        "**2022+** holdout, never a random split. Lower is better; **RPS** is the "
         "headline because match results are *ordered* (a win is closer to a draw "
         "than to a loss)."
     )
@@ -575,11 +613,11 @@ and running the knockout rounds with extra time and shootouts.
     st.markdown("### ⚖️ An honest note on uncertainty")
     st.markdown(
         """
-- These are **probabilities, not predictions** — a 25% favourite loses three times
-  in four.
+- These are **probabilities, not predictions**: a 25% favourite loses three times
+  in four, and a single tournament is one noisy sample.
 - Squad changes, injuries, form and tactics are **not** modelled; only results are.
-- Tournament games are treated as **neutral-venue**, and bracket pairings follow a
-  documented default structure.
+- The **co-hosts play at home**; all other ties are neutral. Knockout bracket
+  pairings follow a documented default structure.
         """
     )
 
@@ -594,7 +632,7 @@ def render_admin():
         '<div class="wc-hero"><span class="wc-eyebrow">Admin</span>'
         '<div class="wc-title">Usage dashboard</div>'
         '<p class="wc-sub">Anonymous, per-session usage. No login, no personal '
-        'data — access is gated by the secret URL token.</p></div>',
+        'data: access is gated by the secret URL token.</p></div>',
         unsafe_allow_html=True,
     )
     s = analytics.summary()

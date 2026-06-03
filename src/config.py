@@ -49,6 +49,10 @@ SHOOTOUT_STRENGTH_WEIGHT = 0.5
 
 WORLD_CUP_GROUP_NAMES = list("ABCDEFGHIJKL")  # A .. L  (12 groups)
 
+# The three co-hosts play their matches at home; everyone else is neutral.
+# (When two hosts meet, the tie is treated as neutral — no designated venue.)
+WORLD_CUP_HOSTS = ["United States", "Canada", "Mexico"]
+
 # -----------------------------------------------------------------------------
 # Official 2026 final-draw groups (drawn 5 Dec 2025, Washington D.C.; completed
 # after the March 2026 play-offs). Source: Wikipedia "2026 FIFA World Cup draw",

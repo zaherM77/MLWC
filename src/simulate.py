@@ -297,22 +297,36 @@ class TournamentEngine:
         state = state or get_state()
         model = model or get_model()
         teams = [t for g in config.WORLD_CUP_GROUP_NAMES for t in groups[g]]
+        hosts = set(config.WORLD_CUP_HOSTS) & set(teams)
 
-        # One expected-goals prediction per ordered pair (neutral venue).
+        # Expected goals for every ordered pair, with venue applied: a co-host
+        # plays at home (home advantage) and its opponent is away; every other
+        # tie (including host-vs-host) is neutral. For each pair we record the
+        # query to run and whether the model's (home, away) outputs must be
+        # swapped so HG[a, b] is always team a's goals and AG[a, b] team b's.
         pairs = [(a, b) for a in teams for b in teams if a != b]
-        rows = pd.concat(
-            [state.feature_row(a, b, neutral=True, tier=DEFAULT_TIER) for a, b in pairs],
-            ignore_index=True,
-        )
-        lam, mu = model.predict_expected_goals(rows)
+        rows, swap = [], []
+        for a, b in pairs:
+            a_host, b_host = a in hosts, b in hosts
+            if a_host and not b_host:            # a at home
+                rows.append(state.feature_row(a, b, neutral=False, tier=DEFAULT_TIER))
+                swap.append(False)
+            elif b_host and not a_host:          # b at home -> query (b, a), then swap
+                rows.append(state.feature_row(b, a, neutral=False, tier=DEFAULT_TIER))
+                swap.append(True)
+            else:                                # neutral
+                rows.append(state.feature_row(a, b, neutral=True, tier=DEFAULT_TIER))
+                swap.append(False)
+        lam, mu = model.predict_expected_goals(pd.concat(rows, ignore_index=True))
 
         n = len(teams)
         HG = np.zeros((n, n))
         AG = np.zeros((n, n))
         idx = {t: i for i, t in enumerate(teams)}
-        for (a, b), la, m in zip(pairs, lam, mu):
-            HG[idx[a], idx[b]] = la
-            AG[idx[a], idx[b]] = m
+        for (a, b), la, m, sw in zip(pairs, lam, mu, swap):
+            ga, gb = (m, la) if sw else (la, m)  # team a's goals, team b's goals
+            HG[idx[a], idx[b]] = ga
+            AG[idx[a], idx[b]] = gb
 
         team_elo = np.array([state.elo(t) for t in teams])
         return cls(teams, groups, HG, AG, team_elo)
