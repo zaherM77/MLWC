@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets — NEVER commit. The admin token and any keys live here.
+.streamlit/secrets.toml
+*.key
+*.pem
+
+# Local tooling / AI assistant config
+.claude/
+.cursor/
+.aider*
+
+# Project data and artifacts (regenerated on first run)
+data/
+models/

@@ -1,0 +1,1 @@
+"""Probabilistic football forecasting package."""

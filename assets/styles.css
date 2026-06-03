@@ -1,0 +1,200 @@
+/* =============================================================================
+   "Aurora" theme for the 2026 World Cup forecaster.
+   A dark indigo canvas with an electric cyan -> violet -> magenta gradient
+   language, glassmorphism cards, neon glows and motion. All static CSS — no
+   dynamic/user data is ever placed here (the app escapes any dynamic value it
+   injects into HTML elsewhere).
+   ========================================================================== */
+
+:root {
+  --bg0: #0b0a18;
+  --bg1: #160f2e;
+  --bg2: #1d1340;
+  --cyan: #22d3ee;
+  --violet: #a78bfa;
+  --magenta: #f472b6;
+  --gold: #fde047;
+  --text: #ece9f7;
+  --muted: #9b93c0;
+  --grad: linear-gradient(115deg, #22d3ee 0%, #a78bfa 48%, #f472b6 100%);
+  --card: rgba(255, 255, 255, 0.045);
+  --card-brd: rgba(167, 139, 250, 0.28);
+}
+
+/* Animated aurora canvas */
+.stApp {
+  background:
+    radial-gradient(1100px 620px at 12% -8%, rgba(34, 211, 238, 0.16), transparent 60%),
+    radial-gradient(1000px 680px at 92% 4%, rgba(244, 114, 182, 0.16), transparent 60%),
+    radial-gradient(900px 700px at 50% 120%, rgba(167, 139, 250, 0.18), transparent 60%),
+    linear-gradient(160deg, var(--bg0), var(--bg1) 55%, var(--bg2));
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+.block-container {
+  max-width: 1180px;
+  padding-top: 2.0rem;
+  padding-bottom: 3rem;
+}
+
+/* ---- Hero ---------------------------------------------------------------- */
+.wc-hero {
+  position: relative;
+  border-radius: 22px;
+  padding: 2.4rem 2.2rem;
+  margin-bottom: 1.4rem;
+  background: linear-gradient(135deg, rgba(34,211,238,0.14), rgba(167,139,250,0.10) 45%, rgba(244,114,182,0.14));
+  border: 1px solid var(--card-brd);
+  box-shadow: 0 18px 60px rgba(124, 58, 237, 0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+  overflow: hidden;
+  animation: fadeUp 0.7s ease both;
+}
+.wc-hero::after {
+  content: "";
+  position: absolute; inset: -2px;
+  background: var(--grad);
+  filter: blur(46px); opacity: 0.16; z-index: 0;
+  animation: drift 14s ease-in-out infinite alternate;
+}
+.wc-hero > * { position: relative; z-index: 1; }
+.wc-eyebrow {
+  letter-spacing: 0.22em; text-transform: uppercase;
+  font-size: 0.72rem; font-weight: 700; color: var(--cyan);
+}
+.wc-title {
+  font-size: clamp(1.7rem, 4.4vw, 3.1rem);
+  line-height: 1.04; font-weight: 800; margin: 0.5rem 0 0.4rem;
+  background: linear-gradient(100deg, #ffffff, #c4b5fd 40%, #f9a8d4);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wc-sub { color: var(--muted); max-width: 60ch; font-size: 1.02rem; margin: 0; }
+.wc-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1.1rem; }
+.wc-chip {
+  font-size: 0.82rem; color: var(--text);
+  background: rgba(255,255,255,0.06); border: 1px solid var(--card-brd);
+  padding: 0.32rem 0.7rem; border-radius: 999px; backdrop-filter: blur(6px);
+}
+.wc-chip b { color: var(--cyan); }
+
+/* ---- Generic cards ------------------------------------------------------- */
+.wc-card {
+  background: var(--card); border: 1px solid var(--card-brd);
+  border-radius: 16px; padding: 1rem 1.1rem; backdrop-filter: blur(8px);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.wc-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(34, 211, 238, 0.55);
+  box-shadow: 0 14px 40px rgba(34, 211, 238, 0.16);
+}
+
+/* ---- Knockout bracket ---------------------------------------------------- */
+.wc-round { animation: fadeUp 0.5s ease both; margin-bottom: 0.4rem; }
+.wc-round-title {
+  font-weight: 800; letter-spacing: 0.03em; margin: 0.6rem 0 0.7rem;
+  font-size: 1.05rem;
+  background: var(--grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wc-bracket { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.wc-match {
+  flex: 1 1 220px; min-width: 200px;
+  background: var(--card); border: 1px solid var(--card-brd);
+  border-radius: 13px; padding: 0.55rem 0.7rem; backdrop-filter: blur(6px);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+.wc-match:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(167,139,250,0.18); }
+.wc-team {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.2rem 0.1rem; color: var(--muted); font-size: 0.93rem;
+}
+.wc-team .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wc-team.win { color: var(--text); font-weight: 700; }
+.wc-team.win .wc-score { background: var(--grad); color: #0b0a18; font-weight: 800; }
+.wc-score {
+  min-width: 1.5rem; text-align: center; border-radius: 7px;
+  padding: 0.02rem 0.4rem; background: rgba(255,255,255,0.06); margin-left: 0.5rem;
+}
+.wc-decider {
+  margin-top: 0.35rem; font-size: 0.7rem; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--violet); text-align: right;
+}
+
+/* ---- Champion banner ----------------------------------------------------- */
+.wc-champion {
+  position: relative; text-align: center; border-radius: 20px;
+  padding: 1.8rem 1rem; margin: 0.6rem 0 1.2rem;
+  background: linear-gradient(120deg, rgba(253,224,71,0.16), rgba(244,114,182,0.14), rgba(34,211,238,0.16));
+  border: 1px solid rgba(253, 224, 71, 0.45);
+  box-shadow: 0 18px 60px rgba(253, 224, 71, 0.14);
+  overflow: hidden; animation: pop 0.6s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+.wc-champion::before {
+  content: ""; position: absolute; top: 0; left: -60%; width: 60%; height: 100%;
+  background: linear-gradient(110deg, transparent, rgba(255,255,255,0.28), transparent);
+  animation: shimmer 2.8s ease-in-out infinite;
+}
+.wc-champ-label {
+  letter-spacing: 0.3em; text-transform: uppercase; font-size: 0.74rem;
+  color: var(--gold); font-weight: 800;
+}
+.wc-champ-name {
+  font-size: clamp(1.8rem, 5vw, 2.8rem); font-weight: 900; margin-top: 0.2rem;
+  background: linear-gradient(100deg, #fff, #fde047 55%, #f9a8d4);
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.wc-champ-sub { color: var(--muted); margin-top: 0.25rem; font-size: 0.95rem; }
+
+/* ---- Streamlit component theming ---------------------------------------- */
+section[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, rgba(13,11,28,0.96), rgba(29,19,64,0.96));
+  border-right: 1px solid var(--card-brd);
+}
+.stButton > button {
+  border-radius: 12px; font-weight: 700; border: 1px solid var(--card-brd);
+  transition: transform 0.15s ease, box-shadow 0.2s ease;
+}
+.stButton > button[kind="primary"] {
+  background: var(--grad); color: #0b0a18; border: none;
+  box-shadow: 0 8px 26px rgba(34,211,238,0.32);
+  animation: glow 2.6s ease-in-out infinite;
+}
+.stButton > button[kind="primary"]:hover { transform: translateY(-2px) scale(1.01); }
+.stButton > button:hover { border-color: var(--cyan); }
+
+div[data-testid="stMetric"] {
+  background: var(--card); border: 1px solid var(--card-brd);
+  border-radius: 14px; padding: 0.8rem 1rem;
+}
+div[data-testid="stMetricValue"] {
+  background: var(--grad); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; font-weight: 800;
+}
+h1, h2, h3 { letter-spacing: -0.01em; }
+.stTabs [data-baseweb="tab-list"] { gap: 0.3rem; flex-wrap: wrap; }
+/* keep plots/images from causing horizontal scroll on phones */
+.stPlotlyChart, .js-plotly-plot, img { max-width: 100% !important; }
+
+/* ---- Motion -------------------------------------------------------------- */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes shimmer { 0% { left: -60%; } 60%, 100% { left: 130%; } }
+@keyframes drift { from { transform: translate3d(-3%, -2%, 0) rotate(0deg); } to { transform: translate3d(3%, 2%, 0) rotate(4deg); } }
+@keyframes glow {
+  0%, 100% { box-shadow: 0 8px 26px rgba(34, 211, 238, 0.30); }
+  50% { box-shadow: 0 10px 34px rgba(244, 114, 182, 0.42); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc-hero::after, .wc-champion::before, .stButton > button[kind="primary"] { animation: none; }
+}
+
+/* ---- Responsive ---------------------------------------------------------- */
+@media (max-width: 640px) {
+  .block-container { padding-top: 1.1rem; padding-left: 0.7rem; padding-right: 0.7rem; }
+  .wc-hero { padding: 1.5rem 1.2rem; border-radius: 18px; }
+  .wc-sub { font-size: 0.94rem; }
+  .wc-match { flex: 1 1 100%; min-width: 0; }
+  div[data-testid="stMetric"] { padding: 0.6rem 0.7rem; }
+}

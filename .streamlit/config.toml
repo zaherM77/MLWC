@@ -1,0 +1,14 @@
+# Streamlit app configuration (used locally and on Streamlit Community Cloud).
+# Theme: "Aurora" — a dark indigo canvas with electric cyan / violet / magenta
+# accents and motion.
+
+[theme]
+base = "dark"
+primaryColor = "#22d3ee"              # electric cyan accent
+backgroundColor = "#0b0a18"           # deep indigo-black
+secondaryBackgroundColor = "#160f2e"  # raised panel
+textColor = "#ece9f7"                 # soft off-white
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

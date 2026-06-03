@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Put the project root on sys.path so tests can `from src import ...`
+# without needing PYTHONPATH set in the environment.
+pythonpath = ["."]
+testpaths = ["tests"]
