@@ -187,6 +187,16 @@ def _admin_token() -> str:
         return config.DEFAULT_ADMIN_TOKEN
 
 
+def _custom_admin_token_set() -> bool:
+    """True if a token is configured via env var or secrets (not the default)."""
+    if os.environ.get("ADMIN_TOKEN"):
+        return True
+    try:
+        return bool(st.secrets["admin_token"])
+    except Exception:
+        return False
+
+
 # --- shared chart helpers -----------------------------------------------------
 
 
@@ -673,10 +683,22 @@ def main():
     """Render the page: admin gate, then hero + sidebar nav + the chosen page."""
     inject_theme()
 
-    # Hidden admin view, gated by a secret URL token (no login).
+    # Hidden admin view, gated by a secret URL token (no login). Whitespace is
+    # trimmed so a stray copy-paste space doesn't silently fail.
     admin_val = st.query_params.get("admin")
-    if admin_val is not None and admin_val == _admin_token():
-        render_admin()
+    if admin_val is not None:
+        if admin_val.strip() == _admin_token().strip():
+            render_admin()
+            return
+        # Param present but wrong: give a clear, leak-free hint rather than
+        # silently falling through to the normal app.
+        st.error("Admin access: token not recognised.")
+        configured = "yes" if _custom_admin_token_set() else "no — using the built-in default"
+        st.caption(
+            f"Custom admin secret configured: **{configured}**. The `?admin=` value "
+            "must match it exactly (no surrounding quotes or spaces). If this whole "
+            "message is missing entirely, the deployed code is older than the admin feature."
+        )
         return
 
     _ensure_session()
