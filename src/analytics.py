@@ -1,8 +1,8 @@
 """File-backed usage analytics for the admin dashboard.
 
-Tracks per-session "users" with click counts, timestamps, location data, and
-optional user names. No authentication, minimal personal data collection --
-just a random session id generated in the browser session, click count, and
+Tracks per-session "users" with click counts, timestamps, and optional user
+details (name and message to admin). No authentication, no personal data collection.
+Just a random session id generated in the browser session, click count, and
 basic session metadata. Persisted as JSON under ``data/``.
 
 Storage shape::
@@ -13,12 +13,8 @@ Storage shape::
           "clicks": <int>,
           "start_time": "<ISO timestamp>",
           "last_activity": "<ISO timestamp>",
-          "location": {
-            "country": "<country>",
-            "city": "<city>",
-            "ip": "<ip>"
-          },
-          "user_name": "<optional name>"
+          "user_name": "<optional name>",
+          "message": "<optional message to admin>"
         },
         ...
       }
@@ -30,9 +26,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-import requests
-
 from . import config
+
 
 
 def _load() -> dict:
@@ -56,25 +51,7 @@ def _save(data: dict) -> None:
         pass  # analytics are best-effort; never break the app over them
 
 
-def _get_geolocation(ip: str | None = None) -> dict:
-    """Fetch geolocation data for an IP address (best-effort)."""
-    if not ip:
-        return {"country": "Unknown", "city": "Unknown", "ip": ip}
-    
-    try:
-        # Using ipapi.co which has a free tier with no auth required
-        response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=2)
-        if response.status_code == 200:
-            data = response.json()
-            return {
-                "country": data.get("country_name", "Unknown"),
-                "city": data.get("city", "Unknown"),
-                "ip": ip,
-            }
-    except Exception:
-        pass
-    
-    return {"country": "Unknown", "city": "Unknown", "ip": ip}
+
 
 
 def _normalize_session(session_data: dict | int) -> dict:
@@ -85,53 +62,50 @@ def _normalize_session(session_data: dict | int) -> dict:
             "clicks": session_data,
             "start_time": None,
             "last_activity": None,
-            "location": {"country": "Unknown", "city": "Unknown", "ip": None},
             "user_name": None,
+            "message": None,
         }
     # Already in new format or partial format
     return {
         "clicks": session_data.get("clicks", 0),
         "start_time": session_data.get("start_time"),
         "last_activity": session_data.get("last_activity"),
-        "location": session_data.get("location", {"country": "Unknown", "city": "Unknown", "ip": None}),
         "user_name": session_data.get("user_name"),
+        "message": session_data.get("message"),
     }
 
 
 
-def record_visit(session_id: str, ip: str | None = None, user_name: str | None = None) -> None:
+def record_visit(session_id: str, user_name: str | None = None) -> None:
     """Register a session as a visitor with metadata (no-op if already seen).
     
     Args:
         session_id: Unique session identifier
-        ip: Optional IP address for geolocation
         user_name: Optional user name/identifier
     """
     data = _load()
     if session_id not in data["users"]:
         now = datetime.now(timezone.utc).isoformat()
-        location = _get_geolocation(ip)
         data["users"][session_id] = {
             "clicks": 0,
             "start_time": now,
             "last_activity": now,
-            "location": location,
             "user_name": user_name,
+            "message": None,
         }
         _save(data)
 
 
-def record_click(session_id: str, count: int = 1, ip: str | None = None) -> None:
+def record_click(session_id: str, count: int = 1) -> None:
     """Increment the click counter for a session (creating it if new).
     
     Args:
         session_id: Unique session identifier
         count: Number of clicks to add (default 1)
-        ip: Optional IP address for geolocation
     """
     data = _load()
     if session_id not in data["users"]:
-        record_visit(session_id, ip=ip)
+        record_visit(session_id)
         data = _load()  # Reload after visit registration
     
     session_data = data["users"][session_id]
@@ -152,6 +126,20 @@ def set_user_name(session_id: str, user_name: str) -> None:
         session_data["user_name"] = user_name
         data["users"][session_id] = session_data
         _save(data)
+
+
+def set_user_message(session_id: str, message: str) -> None:
+    """Set or update the user message for a session."""
+    data = _load()
+    if session_id not in data["users"]:
+        record_visit(session_id)
+        data = _load()  # Reload after visit registration
+    
+    session_data = _normalize_session(data["users"][session_id])
+    session_data["message"] = message if message.strip() else None
+    data["users"][session_id] = session_data
+    _save(data)
+
 
 
 
@@ -176,9 +164,8 @@ def summary() -> dict:
             "clicks": int(clicks),
             "start_time": session_data.get("start_time"),
             "last_activity": session_data.get("last_activity"),
-            "country": session_data.get("location", {}).get("country", "Unknown"),
-            "city": session_data.get("location", {}).get("city", "Unknown"),
             "user_name": session_data.get("user_name"),
+            "message": session_data.get("message"),
         })
     
     per_user = sorted(per_user, key=lambda r: r["clicks"], reverse=True)

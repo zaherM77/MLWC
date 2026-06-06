@@ -163,35 +163,18 @@ BACKTEST_TRAIN_N, BACKTEST_TEST_N = 18_703, 4_421
 # --- analytics / session ------------------------------------------------------
 
 
-def _get_client_ip() -> str | None:
-    """Extract client IP from Streamlit context (best-effort)."""
-    try:
-        # Try to get from Streamlit's request context
-        from streamlit.web.server import Server
-        s = Server.get_current()
-        if s and hasattr(s, 'request_context'):
-            ctx = s.request_context
-            if ctx:
-                return ctx.remote_addr
-    except Exception:
-        pass
-    return None
-
-
 def _ensure_session() -> str:
     """Assign this browser session an anonymous id and count the visit once."""
     if "uid" not in st.session_state:
         st.session_state["uid"] = uuid.uuid4().hex[:12]
-        ip = _get_client_ip()
-        analytics.record_visit(st.session_state["uid"], ip=ip)
+        analytics.record_visit(st.session_state["uid"])
     return st.session_state["uid"]
 
 
 def _track_click() -> None:
     """Count a simulation action for the current session."""
     uid = st.session_state.get("uid", "anon")
-    ip = _get_client_ip()
-    analytics.record_click(uid, ip=ip)
+    analytics.record_click(uid)
 
 
 
@@ -655,13 +638,13 @@ advantage); every other tie is **neutral**.
 
 
 def render_admin():
-    """Minimal usage dashboard, reached only via ?admin=<token>."""
+    """Admin usage dashboard, reached only via ?admin=<token>."""
     inject_theme()
     st.markdown(
         '<div class="wc-hero"><span class="wc-eyebrow">Admin</span>'
         '<div class="wc-title">Usage dashboard</div>'
-        '<p class="wc-sub">Per-session usage with location and activity timestamps. '
-        'No login, no personal data: access is gated by the secret URL token.</p></div>',
+        '<p class="wc-sub">Per-session usage with activity timestamps and user messages. '
+        'No login, no location tracking: access is gated by the secret URL token.</p></div>',
         unsafe_allow_html=True,
     )
     s = analytics.summary()
@@ -681,10 +664,10 @@ def render_admin():
         _style_fig(fig, height=360)
         st.plotly_chart(fig, width="stretch")
         
-        # Detailed session table with all metadata
+        # Detailed session table with metadata
         st.subheader("Session Details")
         display_df = df[[
-            "session", "clicks", "user_name", "country", "city", 
+            "session", "clicks", "user_name",
             "start_time", "last_activity"
         ]].copy()
         
@@ -703,19 +686,26 @@ def render_admin():
             "session": "Session ID",
             "clicks": "Clicks",
             "user_name": "User Name",
-            "country": "Country",
-            "city": "City",
             "start_time": "Session Start",
             "last_activity": "Last Activity",
         })
         
         st.dataframe(display_df, hide_index=True, width="stretch")
+        
+        # Show user messages if any exist
+        messages = df[df["message"].notna() & (df["message"] != "")]
+        if len(messages) > 0:
+            st.subheader("💬 User Messages")
+            for _, row in messages.iterrows():
+                user_info = row["user_name"] if row["user_name"] else f"Session {row['session'][:8]}"
+                with st.container(border=True):
+                    st.write(f"**{user_info}** — {row['start_time']}")
+                    st.write(row["message"])
     else:
         st.info("No usage recorded yet.")
     
     st.caption(
-        "A 'click' is a simulation action (kick-off / run). All data is collected "
-        "anonymously per browser session. Location is inferred from IP address. "
+        "A 'click' is a simulation action (kick-off / run). No location tracking. "
         "Counts reset if the server restarts."
     )
 
@@ -759,6 +749,25 @@ def main():
     choice = st.sidebar.radio("Navigate", list(PAGES), label_visibility="collapsed")
     st.sidebar.markdown("---")
     st.sidebar.caption("Pick a mode, then hit simulate. Every run is a fresh draw of fate. ⚽")
+    
+    # User info section
+    st.sidebar.markdown("### 👤 Your Info (Optional)")
+    uid = st.session_state.get("uid", "anon")
+    user_name = st.sidebar.text_input("Your name:", placeholder="Enter your name")
+    if user_name:
+        analytics.set_user_name(uid, user_name)
+    
+    user_message = st.sidebar.text_area(
+        "Message for the admin:",
+        placeholder="Leave a comment or feedback (optional)",
+        height=80
+    )
+    if st.sidebar.button("Send message", width="stretch"):
+        if user_message.strip():
+            analytics.set_user_message(uid, user_message)
+            st.sidebar.success("✅ Message sent!")
+        else:
+            st.sidebar.warning("Please enter a message to send.")
 
     PAGES[choice]()
 
