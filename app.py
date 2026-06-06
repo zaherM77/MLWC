@@ -163,17 +163,36 @@ BACKTEST_TRAIN_N, BACKTEST_TEST_N = 18_703, 4_421
 # --- analytics / session ------------------------------------------------------
 
 
+def _get_client_ip() -> str | None:
+    """Extract client IP from Streamlit context (best-effort)."""
+    try:
+        # Try to get from Streamlit's request context
+        from streamlit.web.server import Server
+        s = Server.get_current()
+        if s and hasattr(s, 'request_context'):
+            ctx = s.request_context
+            if ctx:
+                return ctx.remote_addr
+    except Exception:
+        pass
+    return None
+
+
 def _ensure_session() -> str:
     """Assign this browser session an anonymous id and count the visit once."""
     if "uid" not in st.session_state:
         st.session_state["uid"] = uuid.uuid4().hex[:12]
-        analytics.record_visit(st.session_state["uid"])
+        ip = _get_client_ip()
+        analytics.record_visit(st.session_state["uid"], ip=ip)
     return st.session_state["uid"]
 
 
 def _track_click() -> None:
     """Count a simulation action for the current session."""
-    analytics.record_click(st.session_state.get("uid", "anon"))
+    uid = st.session_state.get("uid", "anon")
+    ip = _get_client_ip()
+    analytics.record_click(uid, ip=ip)
+
 
 
 def _admin_token() -> str:
@@ -641,8 +660,8 @@ def render_admin():
     st.markdown(
         '<div class="wc-hero"><span class="wc-eyebrow">Admin</span>'
         '<div class="wc-title">Usage dashboard</div>'
-        '<p class="wc-sub">Anonymous, per-session usage. No login, no personal '
-        'data: access is gated by the secret URL token.</p></div>',
+        '<p class="wc-sub">Per-session usage with location and activity timestamps. '
+        'No login, no personal data: access is gated by the secret URL token.</p></div>',
         unsafe_allow_html=True,
     )
     s = analytics.summary()
@@ -653,19 +672,51 @@ def render_admin():
 
     if s["per_user"]:
         df = pd.DataFrame(s["per_user"])
+        
+        # Visualization: clicks per session
         top = df.head(30)
         fig = px.bar(top, x="session", y="clicks", color="clicks",
                      color_continuous_scale=WC_SCALE)
         fig.update_layout(coloraxis_showscale=False, xaxis_title="", yaxis_title="clicks")
         _style_fig(fig, height=360)
         st.plotly_chart(fig, width="stretch")
-        st.dataframe(df.rename(columns={"session": "Session", "clicks": "Clicks"}),
-                     hide_index=True, width="stretch")
+        
+        # Detailed session table with all metadata
+        st.subheader("Session Details")
+        display_df = df[[
+            "session", "clicks", "user_name", "country", "city", 
+            "start_time", "last_activity"
+        ]].copy()
+        
+        # Format timestamps for readability
+        if "start_time" in display_df.columns:
+            display_df["start_time"] = pd.to_datetime(
+                display_df["start_time"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d %H:%M:%S")
+        
+        if "last_activity" in display_df.columns:
+            display_df["last_activity"] = pd.to_datetime(
+                display_df["last_activity"], errors="coerce"
+            ).dt.strftime("%Y-%m-%d %H:%M:%S")
+        
+        display_df = display_df.rename(columns={
+            "session": "Session ID",
+            "clicks": "Clicks",
+            "user_name": "User Name",
+            "country": "Country",
+            "city": "City",
+            "start_time": "Session Start",
+            "last_activity": "Last Activity",
+        })
+        
+        st.dataframe(display_df, hide_index=True, width="stretch")
     else:
         st.info("No usage recorded yet.")
+    
     st.caption(
-        "A 'click' is a simulation action (kick-off / run). Counts are anonymous "
-        "per browser session and reset if the server restarts."
+        "A 'click' is a simulation action (kick-off / run). All data is collected "
+        "anonymously per browser session. Location is inferred from IP address. "
+        "Counts reset if the server restarts."
     )
 
 
