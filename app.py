@@ -394,7 +394,7 @@ def page_play():
     st.write(
         "Simulate one full tournament: every group, every knockout tie, one "
         "champion. Each run is **independent and random**, so you'll usually get "
-        "a different winner. (Spain are favourites, but they win only ~1 in 4.)"
+        "a different winner."
     )
     with st.expander("See the 12 groups (2026 final draw)"):
         _render_groups_overview()

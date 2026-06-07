@@ -9,7 +9,6 @@ group-qualification chances, and head-to-head match forecasts, all explorable
 in an interactive Streamlit app.
 
 ![App screenshot](docs/screenshot.png)
-<!-- Add a screenshot of the running app at docs/screenshot.png -->
 
 ---
 
