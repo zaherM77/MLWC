@@ -1,17 +1,3 @@
-"""Monte Carlo simulation of matches, seasons, and tournaments.
-
-A matchup is turned into a scoreline distribution by:
-
-1. building the point-in-time feature vector (current Elo + recent form),
-2. asking the saved model for expected goals (lambda_a, lambda_b),
-3. drawing a scoreline -- independent Poisson per side, or, if the saved model
-   is the Dixon-Coles bivariate Poisson, sampling from its low-score-corrected
-   joint distribution.
-
-Knockout ties are resolved by extra time (lambdas scaled to 30 minutes) and, if
-still level, a penalty shootout weighted toward the stronger side.
-"""
-
 from __future__ import annotations
 
 import itertools
@@ -25,7 +11,7 @@ import pandas as pd
 
 from . import config, elo, features as features_mod, model as model_mod
 
-DEFAULT_TIER = 2  # simulations are usually for tournaments (major)
+DEFAULT_TIER = 2
 
 
 class MatchResult(NamedTuple):
@@ -33,10 +19,7 @@ class MatchResult(NamedTuple):
 
     goals_a: int
     goals_b: int
-    winner: str  # team name, or "draw" (only possible when knockout=False)
-
-
-# --- Current-state provider ---------------------------------------------------
+    winner: str 
 
 
 @dataclass
@@ -121,7 +104,7 @@ def get_model():
     return _MODEL
 
 
-# --- Scoreline sampling -------------------------------------------------------
+
 
 
 def _sample_scores(
@@ -138,7 +121,6 @@ def _sample_scores(
     return ga, gb
 
 
-# --- Batch (vectorised) simulation --------------------------------------------
 
 
 def simulate_matches(
@@ -153,11 +135,7 @@ def simulate_matches(
     seed: int | None = config.RANDOM_SEED,
     max_goals: int = model_mod.MAX_GOALS,
 ) -> dict:
-    """Vectorised simulation of ``n`` matchups between the two teams.
 
-    Returns a dict of arrays: ``goals_a``, ``goals_b`` (post extra-time for
-    knockouts) and ``winner`` (team name, or "draw" for level league games).
-    """
     state = state or get_state()
     model = model or get_model()
     rng = np.random.default_rng(seed)
@@ -214,10 +192,6 @@ def simulate_match(
     )
     return MatchResult(int(out["goals_a"][0]), int(out["goals_b"][0]), str(out["winner"][0]))
 
-
-# --- Tournament simulation ----------------------------------------------------
-
-# Furthest round reached, as an ordered level. Higher = further.
 GROUP, R32, R16, QF, SF, FINAL, CHAMPION = range(7)
 ROUND_NAMES = {
     GROUP: "Group",
@@ -228,7 +202,6 @@ ROUND_NAMES = {
     FINAL: "Final",
     CHAMPION: "Champion",
 }
-# Labels used for the per-team probability summary.
 PROGRESS_LABELS = [
     ("escape_group", R32),
     ("reach_r16", R16),
@@ -254,13 +227,7 @@ class _GroupStats:
 
 
 class TournamentEngine:
-    """Pre-computes matchup expected goals once, then simulates many tournaments.
 
-    Goals are sampled as independent Poisson per side from the model's expected
-    goals (the Dixon-Coles low-score correction, if any, is omitted here for
-    speed -- it barely moves tournament-level probabilities). All matches are
-    treated as neutral-venue.
-    """
 
     def __init__(
         self,
@@ -273,11 +240,10 @@ class TournamentEngine:
         self.teams = teams
         self.idx = {t: i for i, t in enumerate(teams)}
         self.groups = groups
-        self.HG = hg          # HG[i, j] = expected goals for i (nominal home) vs j
-        self.AG = ag          # AG[i, j] = expected goals for j (nominal away)
+        self.HG = hg          
+        self.AG = ag          
         self.elo = team_elo
 
-        # Fixed group fixtures (6 per group); nominal home is the lower index.
         self._group_fixtures = {
             g: list(itertools.combinations([self.idx[t] for t in members], 2))
             for g, members in groups.items()
@@ -299,11 +265,6 @@ class TournamentEngine:
         teams = [t for g in config.WORLD_CUP_GROUP_NAMES for t in groups[g]]
         hosts = set(config.WORLD_CUP_HOSTS) & set(teams)
 
-        # Expected goals for every ordered pair, with venue applied: a co-host
-        # plays at home (home advantage) and its opponent is away; every other
-        # tie (including host-vs-host) is neutral. For each pair we record the
-        # query to run and whether the model's (home, away) outputs must be
-        # swapped so HG[a, b] is always team a's goals and AG[a, b] team b's.
         pairs = [(a, b) for a in teams for b in teams if a != b]
         rows, swap = [], []
         for a, b in pairs:
@@ -355,12 +316,7 @@ class TournamentEngine:
         return ordered, stats
 
     def _apply_tiebreakers(self, teams, results, stats, rng) -> list[int]:
-        """FIFA 2026 order: points, GD, goals, then head-to-head, then lots.
 
-        Fair-play points are not modelled (no cards in the data), so a residual
-        tie after head-to-head is resolved by drawing of lots (random).
-        """
-        # Overall: points, GD, goals scored.
         ordered = sorted(
             teams, key=lambda t: (stats[t].pts, stats[t].gd, stats[t].gf), reverse=True
         )
@@ -400,11 +356,7 @@ class TournamentEngine:
 
     # -- best thirds + bracket slotting --
     def _assign_thirds(self, thirds: list[tuple[int, str]], rng) -> dict[str, int]:
-        """Map the 8 best thirds to slots 3T1..3T8, avoiding same-group meetings.
 
-        ``thirds`` is the chosen eight as (team_idx, group_letter). Uses the
-        official allocation table if present in config, else a constraint search.
-        """
         slots = list(config.THIRD_SLOT_OPPONENT_GROUP)  # 3T1..3T8
         qualifying = frozenset(g for _, g in thirds)
         by_group = {g: t for t, g in thirds}
@@ -520,11 +472,7 @@ class TournamentEngine:
 
     # -- one full tournament WITH scorelines (for visualisation) --
     def _knockout_match_detailed(self, i: int, j: int, rng) -> tuple[int, dict]:
-        """Play one knockout tie and return (winner_idx, detail dict).
 
-        Detail includes the regulation score, extra-time total if level, a
-        flavour penalty score if still level, and how it was decided.
-        """
         hg = int(rng.poisson(self.HG[i, j]))
         ag = int(rng.poisson(self.AG[i, j]))
         detail = {
@@ -552,15 +500,7 @@ class TournamentEngine:
         return win, detail
 
     def simulate_detailed(self, rng) -> dict:
-        """Play ONE full World Cup and return every scoreline, groups to final.
-
-        Returns a dict with: ``groups`` (per-group match scores + final table
-        with W/D/L and an advance/out status), ``thirds`` (all 12 third-placed
-        teams ranked, flagged if among the best 8), ``knockout`` (each round's
-        ties with scores and how they were decided), ``champion`` and
-        ``runner_up``. This is the single-tournament view for the UI; every play
-        is independent and random, so the winner varies run to run.
-        """
+ 
         group_results: dict[str, dict] = {}
         winners, runners, thirds, third_stats = {}, {}, [], {}
 
@@ -817,5 +757,5 @@ def simulate_season(
     Returns aggregated outcome statistics (e.g. final-table positions).
     """
     rng = np.random.default_rng(seed)
-    del rng  # placeholder until implemented
+    del rng
     raise NotImplementedError

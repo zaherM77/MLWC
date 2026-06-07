@@ -1,13 +1,3 @@
-"""Streamlit front-end for the probabilistic 2026 World Cup forecaster.
-
-Run with:  streamlit run app.py
-
-Nothing is shown pre-computed: the visitor chooses to *play out a single
-tournament* (full scorelines, groups to final) or *run a live Monte Carlo*
-(odds converging on screen). A hidden admin dashboard (usage analytics) is
-reached via the ``?admin=<token>`` URL parameter.
-"""
-
 from __future__ import annotations
 
 import html
@@ -160,9 +150,6 @@ BACKTEST = pd.DataFrame(
 BACKTEST_TRAIN_N, BACKTEST_TEST_N = 18_703, 4_421
 
 
-# --- analytics / session ------------------------------------------------------
-
-
 def _ensure_session() -> str:
     """Assign this browser session an anonymous id and count the visit once."""
     if "uid" not in st.session_state:
@@ -179,7 +166,6 @@ def _track_click() -> None:
 
 
 def _admin_token() -> str:
-    """Resolve the admin token: env var > Streamlit secret > config default."""
     tok = os.environ.get("ADMIN_TOKEN")
     if tok:
         return tok
@@ -190,7 +176,6 @@ def _admin_token() -> str:
 
 
 def _custom_admin_token_set() -> bool:
-    """True if a token is configured via env var or secrets (not the default)."""
     if os.environ.get("ADMIN_TOKEN"):
         return True
     try:
@@ -198,8 +183,6 @@ def _custom_admin_token_set() -> bool:
     except Exception:
         return False
 
-
-# --- shared chart helpers -----------------------------------------------------
 
 
 def _odds_bar(df: pd.DataFrame, height: int = 520):
@@ -633,12 +616,7 @@ advantage); every other tie is **neutral**.
         """
     )
 
-
-# --- admin dashboard ----------------------------------------------------------
-
-
 def render_admin():
-    """Admin usage dashboard, reached only via ?admin=<token>."""
     inject_theme()
     st.markdown(
         '<div class="wc-hero"><span class="wc-eyebrow">Admin</span>'
@@ -656,22 +634,19 @@ def render_admin():
     if s["per_user"]:
         df = pd.DataFrame(s["per_user"])
         
-        # Visualization: clicks per session
-        top = df.head(30)
+        top = df.head(100)
         fig = px.bar(top, x="session", y="clicks", color="clicks",
                      color_continuous_scale=WC_SCALE)
         fig.update_layout(coloraxis_showscale=False, xaxis_title="", yaxis_title="clicks")
         _style_fig(fig, height=360)
         st.plotly_chart(fig, width="stretch")
         
-        # Detailed session table with metadata
         st.subheader("Session Details")
         display_df = df[[
             "session", "clicks", "user_name", "message",
             "start_time", "last_activity"
         ]].copy()
         
-        # Format timestamps for readability
         if "start_time" in display_df.columns:
             display_df["start_time"] = pd.to_datetime(
                 display_df["start_time"], errors="coerce"
@@ -693,7 +668,6 @@ def render_admin():
         
         st.dataframe(display_df, hide_index=True, width="stretch")
         
-        # Show user messages if any exist
         messages = df[df["message"].notna() & (df["message"] != "")]
         if len(messages) > 0:
             st.subheader("💬 User Messages")
@@ -722,18 +696,13 @@ PAGES = {
 
 
 def main():
-    """Render the page: admin gate, then hero + sidebar nav + the chosen page."""
     inject_theme()
 
-    # Hidden admin view, gated by a secret URL token (no login). Whitespace is
-    # trimmed so a stray copy-paste space doesn't silently fail.
     admin_val = st.query_params.get("admin")
     if admin_val is not None:
         if admin_val.strip() == _admin_token().strip():
             render_admin()
             return
-        # Param present but wrong: give a clear, leak-free hint rather than
-        # silently falling through to the normal app.
         st.error("Admin access: token not recognised.")
         configured = "yes" if _custom_admin_token_set() else "no — using the built-in default"
         st.caption(

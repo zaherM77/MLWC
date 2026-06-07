@@ -1,19 +1,3 @@
-"""International football Elo system.
-
-Ratings are computed by processing the full results history in chronological
-order. Every team starts at :data:`config.ELO_BASE_RATING`. Each match applies a
-standard Elo update, scaled by:
-
-* a **margin-of-victory** multiplier (log-dampened in the goal difference), and
-* a **match-importance** weight ``K`` derived from the ``tournament`` column.
-
-Home advantage is added to the home team's *effective* rating for the
-expectation calculation, except when the match is played on neutral ground.
-
-The engine records the rating of every team after every match, which lets it
-answer point-in-time queries (a team's Elo as of any date, with no look-ahead).
-"""
-
 from __future__ import annotations
 
 import json
@@ -23,10 +7,6 @@ import pandas as pd
 
 from . import config
 
-# --- Tournament classification ------------------------------------------------
-#
-# Continental championship *finals* tournaments (qualifiers are handled
-# separately by the "qualification" keyword).
 CONTINENTAL_FINALS = {
     "UEFA Euro",
     "Copa América",
@@ -41,7 +21,6 @@ CONTINENTAL_FINALS = {
 
 
 def assign_k(tournament: str) -> float:
-    """Map a ``tournament`` label to its match-importance weight ``K``."""
     weights = config.ELO_K_WEIGHTS
     if not isinstance(tournament, str):
         return weights["friendly"]
@@ -58,26 +37,18 @@ def assign_k(tournament: str) -> float:
     return weights["other_competitive"]
 
 
-# --- Core Elo maths -----------------------------------------------------------
 
 
 def expected_score(rating_a: float, rating_b: float) -> float:
-    """Expected score for A vs B given their ratings."""
     return 1.0 / (1.0 + 10.0 ** ((rating_b - rating_a) / 400.0))
 
 
 def mov_multiplier(goal_diff: int) -> float:
-    """Log-dampened margin-of-victory multiplier.
 
-    A one-goal margin (or a draw) leaves the change unscaled; each additional
-    goal inflates it by a diminishing amount: 1 -> 1.0, 2 -> 1.69, 3 -> 2.10,
-    5 -> 2.61.
-    """
     return 1.0 + math.log(max(abs(goal_diff), 1))
 
 
 def result_score(home_score: int, away_score: int) -> float:
-    """Realised result for the home team: 1.0 win, 0.5 draw, 0.0 loss."""
     if home_score > away_score:
         return 1.0
     if home_score < away_score:
@@ -94,13 +65,7 @@ def match_delta(
     neutral: bool,
     home_advantage: float = config.ELO_HOME_ADVANTAGE,
 ) -> float:
-    """Rating change applied to the home team for a single match.
 
-    Combines the importance weight ``k``, the log-dampened margin-of-victory
-    multiplier, and home advantage (skipped on neutral ground). The away team
-    receives the negative of this delta (zero-sum). This is the single source of
-    truth for the Elo update, shared by the engine and the feature builder.
-    """
     eff_home = rating_home + (0.0 if neutral else home_advantage)
     expected_home = expected_score(eff_home, rating_away)
     score = result_score(home_score, away_score)
@@ -115,21 +80,14 @@ def update_ratings(
     k: float = config.ELO_K_FACTOR,
     home_advantage: float = config.ELO_HOME_ADVANTAGE,
 ) -> tuple[float, float]:
-    """Update home/away ratings after a match (zero-sum, no margin scaling).
 
-    ``home_score`` is the realised result for the home team (1=win, 0.5=draw,
-    0=loss). Retained for simple/standalone use and unit tests.
-    """
     expected_home = expected_score(rating_home + home_advantage, rating_away)
     delta = k * (home_score - expected_home)
     return rating_home + delta, rating_away - delta
 
 
-# --- Chronological engine -----------------------------------------------------
-
 
 class EloRatings:
-    """Chronological Elo engine over the full match history."""
 
     def __init__(
         self,
@@ -140,20 +98,14 @@ class EloRatings:
         self.home_advantage = home_advantage
         self.ratings: dict[str, float] = {}
         self.matches_played: dict[str, int] = {}
-        # One record per team per match: the rating *after* that match.
         self._history: list[dict] = []
         self._history_df: pd.DataFrame | None = None
 
     def _rating(self, team: str) -> float:
-        """Current rating for ``team`` (base rating if unseen so far)."""
         return self.ratings.get(team, self.base)
 
     def run(self, matches: pd.DataFrame) -> "EloRatings":
-        """Process all matches in chronological order.
 
-        ``matches`` must contain: date, home_team, away_team, home_score,
-        away_score, tournament, neutral.
-        """
         df = matches.sort_values("date")
         records = []
         for row in df.itertuples(index=False):
@@ -179,7 +131,6 @@ class EloRatings:
         return self
 
     def current_table(self) -> pd.DataFrame:
-        """Final current ratings as a table, sorted by Elo descending."""
         rows = [
             {
                 "team": team,
@@ -192,11 +143,7 @@ class EloRatings:
         return table.reset_index(drop=True)
 
     def ratings_as_of(self, date) -> pd.Series:
-        """Each team's Elo as of ``date`` (inclusive), with no look-ahead.
 
-        Returns a Series indexed by team, sorted descending. Teams that had not
-        yet played by ``date`` are omitted (they sit at the base rating).
-        """
         if self._history_df is None:
             raise RuntimeError("call run() before querying ratings_as_of()")
 
@@ -208,7 +155,6 @@ class EloRatings:
         return latest.sort_values(ascending=False)
 
     def save(self, path=config.ELO_CURRENT_PATH) -> None:
-        """Persist the final current ratings to JSON."""
         table = self.current_table()
         as_of = (
             pd.to_datetime(self._history_df["date"]).max().date().isoformat()
@@ -229,8 +175,6 @@ class EloRatings:
             json.dump(payload, fh, ensure_ascii=False, indent=2)
 
 
-# --- Convenience entry point --------------------------------------------------
-
 
 def compute_elo(
     matches: pd.DataFrame | None = None,
@@ -238,7 +182,6 @@ def compute_elo(
     top_n: int = 25,
     verbose: bool = True,
 ) -> EloRatings:
-    """Build Elo ratings from match history, persist, and print the top teams."""
     if matches is None:
         from . import data
 

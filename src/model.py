@@ -1,46 +1,3 @@
-"""Training, evaluation and persistence of match-forecasting models.
-
-Two models are trained and compared on an *out-of-time* holdout:
-
-1. ``DixonColesModel`` — a Dixon-Coles style bivariate Poisson. Each team has an
-   attack and a defence strength; home advantage is a single shared term
-   (suppressed on neutral ground); a low-score dependence parameter ``rho``
-   corrects the independence assumption for 0-0/1-0/0-1/1-1 scorelines. It is
-   the *interpretable* baseline: every coefficient is a team strength you can
-   read off directly.
-
-2. ``PoissonGBModel`` — two ``HistGradientBoostingRegressor(loss="poisson")``
-   models (one per side) that predict expected goals from the engineered
-   features, then convert those to a scoreline distribution.
-
-Both turn expected goals into a 3-way outcome distribution
-``[P(home win), P(draw), P(away win)]``.
-
-------------------------------------------------------------------------------
-Why a TIME-BASED split (train < 2022, test 2022+), never a random one
-------------------------------------------------------------------------------
-Team strength drifts over time (squads, managers, generations of players). A
-random train/test split would put matches from 2024 in the training set and
-matches from 2019 in the test set — i.e. the model would "know the future"
-relative to what it is asked to predict. That leaks information that would not
-exist at real forecast time and produces optimistic, dishonest metrics. A
-chronological cut mirrors deployment exactly: fit on the past, forecast the
-unseen future. (The features themselves are likewise point-in-time; see
-``features.py``.)
-
-------------------------------------------------------------------------------
-Why RANKED PROBABILITY SCORE (RPS) is the headline metric
-------------------------------------------------------------------------------
-A football result is *ordinal*: home win > draw > away win. If the true result
-is a home win, a forecast that put its mass on "draw" was less wrong than one
-that put it on "away win". Log-loss and the (multiclass) Brier score treat the
-three outcomes as unordered and penalise both errors equally. RPS works on the
-*cumulative* distribution, so it rewards probability mass placed *near* the
-true outcome. That makes it the standard proper scoring rule for ordered
-forecasts like match results. We still report log-loss and Brier alongside it,
-plus a reliability check, but selection is on RPS.
-"""
-
 from __future__ import annotations
 
 import numpy as np
@@ -58,32 +15,19 @@ MAX_GOALS = 10
 TEST_FROM_YEAR = 2022
 OUTCOME_LABELS = ("home_win", "draw", "away_win")  # ordered for RPS
 
-# Security: model artifacts are joblib/pickle, so loading one EXECUTES the code
-# embedded in it. We therefore treat the model file as a trusted, project-owned
-# artifact and never let a caller-supplied ``name`` widen that trust boundary.
-# ``name`` is a fixed constant everywhere in this codebase ("match_model"); the
-# guard below is defense-in-depth so it can never become a path-traversal /
-# arbitrary-file-load primitive even if a future caller passes it through.
 ALLOWED_MODEL_NAMES = frozenset({"match_model"})
 
 
 def _model_path(name: str):
-    """Resolve ``<MODELS_DIR>/<name>.joblib``, rejecting anything untrusted.
 
-    The name must be on the whitelist (which also forbids separators, ``..``,
-    and absolute paths), and the resolved file must stay inside ``MODELS_DIR``.
-    """
     if name not in ALLOWED_MODEL_NAMES:
         raise ValueError(f"unknown / untrusted model name: {name!r}")
     models_dir = config.MODELS_DIR.resolve()
     path = (models_dir / f"{name}.joblib").resolve()
-    # Belt-and-braces: ensure the resolved path did not escape MODELS_DIR.
     if path.parent != models_dir:
         raise ValueError(f"resolved model path escapes models dir: {path}")
     return path
 
-
-# --- Outcome helpers ----------------------------------------------------------
 
 
 def outcome_index(home_score: int, away_score: int) -> int:
@@ -111,18 +55,12 @@ def _dc_tau(h: int, a: int, lam: float, mu: float, rho: float) -> float:
 def score_matrix(
     lam: float, mu: float, rho: float | None = None, max_goals: int = MAX_GOALS
 ) -> np.ndarray:
-    """Normalised scoreline distribution; ``grid[i, j] = P(home=i, away=j)``.
 
-    With ``rho`` set, applies the Dixon-Coles correction to the four low-score
-    cells; otherwise assumes independent Poisson margins.
-    """
-    # Guard against pathological expected goals (e.g. extreme coefficients from
-    # data-sparse teams), which would otherwise underflow the truncated grid.
     lam = float(np.clip(lam, 1e-3, 15.0))
     mu = float(np.clip(mu, 1e-3, 15.0))
     h = poisson.pmf(np.arange(max_goals + 1), lam)
     a = poisson.pmf(np.arange(max_goals + 1), mu)
-    grid = np.outer(h, a)  # grid[i, j] = P(home=i, away=j)
+    grid = np.outer(h, a) 
 
     if rho is not None:
         for i in (0, 1):
@@ -143,8 +81,6 @@ def outcome_probs_from_goals(
     p_away = np.triu(grid, 1).sum()   # i < j
     return np.array([p_home, p_draw, p_away])
 
-
-# --- Metrics ------------------------------------------------------------------
 
 
 def ranked_probability_score(probs: np.ndarray, outcomes: np.ndarray) -> float:
@@ -192,8 +128,6 @@ def reliability_table(
         )
     return pd.DataFrame(rows), ece
 
-
-# --- Model 1: Dixon-Coles bivariate Poisson -----------------------------------
 
 
 class DixonColesModel:
@@ -414,26 +348,12 @@ def save(model, name: str = "match_model") -> None:
 
 
 def load(name: str = "match_model"):
-    """Load a persisted model from the models directory.
 
-    NOTE: joblib uses pickle, so this executes code embedded in the file. Only
-    project-owned artifacts in ``MODELS_DIR`` are ever loaded; ``_model_path``
-    enforces that ``name`` is whitelisted and cannot traverse out of that dir.
-    """
     return joblib.load(_model_path(name))
 
 
 def ensure_model(name: str = "match_model"):
-    """Return the saved model, training and caching it first if it is absent.
 
-    This lets the app bootstrap itself on a clean machine -- e.g. a fresh
-    Streamlit Cloud instance with no committed artifacts. If no model file
-    exists, features are built from the (auto-downloaded) public dataset and a
-    Poisson gradient-boosting model is trained on all available matches, then
-    saved to disk so later loads are instant. The time-based backtest in
-    :func:`evaluate_and_compare` is separate and still trains on the pre-2022
-    split only.
-    """
     path = _model_path(name)  # validates name / containment
     if path.exists():
         return load(name)

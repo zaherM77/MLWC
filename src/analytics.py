@@ -1,26 +1,3 @@
-"""File-backed usage analytics for the admin dashboard.
-
-Tracks per-session "users" with click counts, timestamps, and optional user
-details (name and message to admin). No authentication, no personal data collection.
-Just a random session id generated in the browser session, click count, and
-basic session metadata. Persisted as JSON under ``data/``.
-
-Storage shape::
-
-    {
-      "users": {
-        "<session_id>": {
-          "clicks": <int>,
-          "start_time": "<ISO timestamp>",
-          "last_activity": "<ISO timestamp>",
-          "user_name": "<optional name>",
-          "message": "<optional message to admin>"
-        },
-        ...
-      }
-    }
-"""
-
 from __future__ import annotations
 
 import json
@@ -48,16 +25,14 @@ def _save(data: dict) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     except OSError:
-        pass  # analytics are best-effort; never break the app over them
+        pass 
 
 
 
 
 
 def _normalize_session(session_data: dict | int) -> dict:
-    """Normalize old and new session data formats to the new structure."""
     if isinstance(session_data, int):
-        # Old format: just a click count
         return {
             "clicks": session_data,
             "start_time": None,
@@ -65,7 +40,6 @@ def _normalize_session(session_data: dict | int) -> dict:
             "user_name": None,
             "message": None,
         }
-    # Already in new format or partial format
     return {
         "clicks": session_data.get("clicks", 0),
         "start_time": session_data.get("start_time"),
@@ -77,12 +51,7 @@ def _normalize_session(session_data: dict | int) -> dict:
 
 
 def record_visit(session_id: str, user_name: str | None = None) -> None:
-    """Register a session as a visitor with metadata (no-op if already seen).
-    
-    Args:
-        session_id: Unique session identifier
-        user_name: Optional user name/identifier
-    """
+
     data = _load()
     if session_id not in data["users"]:
         now = datetime.now(timezone.utc).isoformat()
@@ -97,12 +66,7 @@ def record_visit(session_id: str, user_name: str | None = None) -> None:
 
 
 def record_click(session_id: str, count: int = 1) -> None:
-    """Increment the click counter for a session (creating it if new).
-    
-    Args:
-        session_id: Unique session identifier
-        count: Number of clicks to add (default 1)
-    """
+
     data = _load()
     if session_id not in data["users"]:
         record_visit(session_id)
@@ -117,7 +81,6 @@ def record_click(session_id: str, count: int = 1) -> None:
 
 
 def set_user_name(session_id: str, user_name: str) -> None:
-    """Set or update the user name for a session."""
     data = _load()
     if session_id not in data["users"]:
         record_visit(session_id, user_name=user_name)
@@ -129,11 +92,10 @@ def set_user_name(session_id: str, user_name: str) -> None:
 
 
 def set_user_message(session_id: str, message: str) -> None:
-    """Set or update the user message for a session."""
     data = _load()
     if session_id not in data["users"]:
         record_visit(session_id)
-        data = _load()  # Reload after visit registration
+        data = _load()
     
     session_data = _normalize_session(data["users"][session_id])
     session_data["message"] = message if message.strip() else None
@@ -144,11 +106,7 @@ def set_user_message(session_id: str, message: str) -> None:
 
 
 def summary() -> dict:
-    """Return aggregate stats for the admin dashboard.
 
-    Keys: ``total_users``, ``total_clicks``, ``avg_clicks`` and ``per_user``
-    (a list of detailed session data sorted by clicks desc).
-    """
     users_data = _load()["users"]
     total_users = len(users_data)
     total_clicks = 0

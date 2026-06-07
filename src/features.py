@@ -1,15 +1,3 @@
-"""Per-match feature engineering for the forecasting model.
-
-The table is built in a single chronological pass over the *entire* results
-history so that Elo ratings and rolling form have no cold start. Only matches
-from ``start_year`` onward are emitted as rows, but every prior match still
-contributes to the running state.
-
-Every feature is strictly *point-in-time*: it is recorded using the state as it
-stood **before** the match is played, and the state is only updated afterwards.
-This guarantees there is no leakage of a match's own result into its features.
-"""
-
 from __future__ import annotations
 
 from collections import defaultdict, deque
@@ -36,11 +24,7 @@ TARGET_COLUMNS = ["home_score", "away_score"]
 
 
 def importance_tier(tournament: str) -> int:
-    """Encode tournament importance: 0 friendly, 1 competitive, 2 major.
 
-    Derived from the Elo K-weight so there is a single source of truth for how
-    competitions are ranked.
-    """
     k = elo.assign_k(tournament)
     w = config.ELO_K_WEIGHTS
     if k <= w["friendly"]:
@@ -51,10 +35,7 @@ def importance_tier(tournament: str) -> int:
 
 
 def _form_avg(window: deque) -> tuple[float, float]:
-    """Mean (goals_for, goals_against) over a team's recent matches.
 
-    Returns (nan, nan) for a team with no prior matches.
-    """
     if not window:
         return float("nan"), float("nan")
     gf = sum(g for g, _ in window) / len(window)
@@ -67,11 +48,7 @@ def build_features(
     start_year: int = DEFAULT_START_YEAR,
     form_window: int = FORM_WINDOW,
 ) -> pd.DataFrame:
-    """Build the per-match feature/target table.
 
-    State (Elo + rolling form) accumulates over all history; only matches in
-    ``start_year`` or later are returned as rows.
-    """
     if matches is None:
         from . import data
 

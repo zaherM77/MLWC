@@ -1,5 +1,3 @@
-"""Tests for the file-backed usage analytics (admin dashboard)."""
-
 from src import analytics, config
 
 
@@ -7,7 +5,7 @@ def test_visit_and_click_counts(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ANALYTICS_PATH", tmp_path / "analytics.json")
 
     analytics.record_visit("u1")
-    analytics.record_visit("u1")  # idempotent: same session not double-counted
+    analytics.record_visit("u1") 
     analytics.record_click("u1")
     analytics.record_click("u1")
     analytics.record_visit("u2")
@@ -17,7 +15,6 @@ def test_visit_and_click_counts(tmp_path, monkeypatch):
     assert s["total_users"] == 2
     assert s["total_clicks"] == 3
     assert abs(s["avg_clicks"] - 1.5) < 1e-9
-    # per_user is sorted by clicks descending
     assert s["per_user"][0] == {"session": "u1", "clicks": 2}
 
 
