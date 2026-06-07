@@ -745,31 +745,29 @@ def main():
     _ensure_session()
     hero()
 
-    st.sidebar.markdown("### Navigate")
-    choice = st.sidebar.radio("Navigate", list(PAGES), label_visibility="collapsed")
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Pick a mode, then hit simulate. Every run is a fresh draw of fate. ⚽")
-    
-    # User info section
-    st.sidebar.markdown("### 👤 Your Predictions (Optional)")
-    uid = st.session_state.get("uid", "anon")
-    user_name = st.sidebar.text_input("Your name:", placeholder="Enter your name")
-    if user_name:
-        analytics.set_user_name(uid, user_name)
-    
-    user_message = st.sidebar.text_area(
-        "Predictions",
-        placeholder="Who will win the World Cup? Any dark horses? Share your thoughts!",
-        height=80
-    )
-    if st.sidebar.button("Send message", width="stretch"):
-        if user_message.strip():
-            analytics.set_user_message(uid, user_message)
-            st.sidebar.success("✅ Message sent!")
-        else:
-            st.sidebar.warning("Please enter a message to send.")
+    choice = st.radio("Navigate", list(PAGES), horizontal=True, label_visibility="collapsed")
+    st.markdown("---")
 
     PAGES[choice]()
+
+    st.markdown("---")
+    with st.expander("👤 Your Predictions (Optional)"):
+        uid = st.session_state.get("uid", "anon")
+        user_name = st.text_input("Your name:", placeholder="Enter your name")
+        if user_name:
+            analytics.set_user_name(uid, user_name)
+        
+        user_message = st.text_area(
+            "Predictions",
+            placeholder="Who will win the World Cup? Any dark horses? Share your thoughts!",
+            height=80
+        )
+        if st.button("Send message", width="stretch"):
+            if user_message.strip():
+                analytics.set_user_message(uid, user_message)
+                st.success("✅ Message sent!")
+            else:
+                st.warning("Please enter a message to send.")
 
 
 if __name__ == "__main__":
