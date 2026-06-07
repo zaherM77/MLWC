@@ -477,7 +477,7 @@ def page_odds():
         "probabilities **converge live**. The averaged picture favours the "
         "strongest teams, but even the top side wins only a minority of the time."
     )
-    n = st.slider("Tournaments to simulate", 1_000, 20_000, 5_000, 1_000)
+    n = st.slider("Tournaments to simulate", 1_000, 10000, 1000, 1_000)
     run = st.button("📊 Run the simulation", type="primary")
 
     if run:
