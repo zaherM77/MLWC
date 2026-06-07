@@ -546,13 +546,13 @@ def page_match():
     m1.metric(f"{team_a} win", f"{p_a * 100:.1f}%")
     m2.metric("Draw", f"{p_draw * 100:.1f}%")
     m3.metric(f"{team_b} win", f"{p_b * 100:.1f}%")
-    st.caption(
-        f"Expected goals: {team_a}: **{lam:.2f}**, {team_b}: **{mu:.2f}**"
-        + ("  ·  neutral venue" if neutral else f"  ·  {team_a} at home")
-    )
+    # st.caption(
+    #     f"Expected goals: {team_a}: **{lam:.2f}**, {team_b}: **{mu:.2f}**"
+    #     + ("  ·  neutral venue" if neutral else f"  ·  {team_a} at home")
+    # )
 
-    ga, gb = divmod(int(grid[:11, :11].argmax()), grid.shape[1])
-    st.markdown(f"**Most likely scoreline:** {team_a} {ga}–{gb} {team_b}")
+    # ga, gb = divmod(int(grid[:11, :11].argmax()), grid.shape[1])
+    # st.markdown(f"**Most likely scoreline:** {team_a} {ga}–{gb} {team_b}")
 
     k = 7
     fig = px.imshow(
@@ -751,15 +751,15 @@ def main():
     st.sidebar.caption("Pick a mode, then hit simulate. Every run is a fresh draw of fate. ⚽")
     
     # User info section
-    st.sidebar.markdown("### 👤 Your Info (Optional)")
+    st.sidebar.markdown("### 👤 Your Predictions (Optional)")
     uid = st.session_state.get("uid", "anon")
     user_name = st.sidebar.text_input("Your name:", placeholder="Enter your name")
     if user_name:
         analytics.set_user_name(uid, user_name)
     
     user_message = st.sidebar.text_area(
-        "Message for the admin:",
-        placeholder="Leave a comment or feedback (optional)",
+        "Predictions",
+        placeholder="Who will win the World Cup? Any dark horses? Share your thoughts!",
         height=80
     )
     if st.sidebar.button("Send message", width="stretch"):
