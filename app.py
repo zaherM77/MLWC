@@ -667,7 +667,7 @@ def render_admin():
         # Detailed session table with metadata
         st.subheader("Session Details")
         display_df = df[[
-            "session", "clicks", "user_name",
+            "session", "clicks", "user_name", "message",
             "start_time", "last_activity"
         ]].copy()
         
@@ -686,6 +686,7 @@ def render_admin():
             "session": "Session ID",
             "clicks": "Clicks",
             "user_name": "User Name",
+            "message": "Message",
             "start_time": "Session Start",
             "last_activity": "Last Activity",
         })
