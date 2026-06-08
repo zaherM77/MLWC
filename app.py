@@ -39,6 +39,10 @@ def _esc(value) -> str:
     return html.escape(str(value))
 
 
+_CONFIG_2D = {"scrollZoom": False, "displayModeBar": False}
+_CONFIG_3D = {"scrollZoom": False, "displayModeBar": False}
+
+
 def _style_fig(fig, *, height=None):
     """Apply the dark Aurora look to any Plotly figure."""
     fig.update_layout(
@@ -47,6 +51,7 @@ def _style_fig(fig, *, height=None):
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Inter, sans-serif", color=PALETTE["text"], size=13),
         margin=dict(l=10, r=10, t=10, b=10),
+        dragmode=False,
     )
     if height is not None:
         fig.update_layout(height=height)
@@ -130,9 +135,21 @@ def team_list() -> list[str]:
 def predict_match(team_a: str, team_b: str, neutral: bool):
     """Expected goals, scoreline grid, and W/D/W probabilities for a matchup."""
     state, mdl = load_state(), load_model()
-    row = state.feature_row(team_a, team_b, neutral=neutral, tier=simulate.DEFAULT_TIER)
-    lam, mu = mdl.predict_expected_goals(row)
-    lam, mu = float(lam[0]), float(mu[0])
+    row_ab = state.feature_row(team_a, team_b, neutral=neutral, tier=simulate.DEFAULT_TIER)
+    lam_ab, mu_ab = mdl.predict_expected_goals(row_ab)
+    lam_ab, mu_ab = float(lam_ab[0]), float(mu_ab[0])
+
+    if neutral:
+        # Average both orderings to make neutral predictions symmetric:
+        # Brazil vs Argentina neutral == Argentina vs Brazil neutral.
+        row_ba = state.feature_row(team_b, team_a, neutral=True, tier=simulate.DEFAULT_TIER)
+        lam_ba, mu_ba = mdl.predict_expected_goals(row_ba)
+        lam_ba, mu_ba = float(lam_ba[0]), float(mu_ba[0])
+        lam = (lam_ab + mu_ba) / 2
+        mu = (mu_ab + lam_ba) / 2
+    else:
+        lam, mu = lam_ab, mu_ab
+
     rho = getattr(mdl, "rho", None) if isinstance(mdl, model_mod.DixonColesModel) else None
     grid = model_mod.score_matrix(lam, mu, rho=rho)
     probs = model_mod.outcome_probs_from_goals(lam, mu, rho=rho)
@@ -227,7 +244,7 @@ def _bar3d_mesh(x, y, dz, color, name):
 
 def _render_3d_podium(top: pd.DataFrame):
     """Rotatable 3D bar chart of the top contenders (an optional alt view)."""
-    st.caption("Drag to rotate · scroll to zoom, taller, pinker bars are the bigger title shouts.")
+    st.caption("🖱️ Drag to rotate · double-click to reset view · taller = higher title odds")
     chart = top.head(12).reset_index(drop=True)
     wins = (chart["win"] * 100).tolist()
     teams = chart["team"].tolist()
@@ -246,16 +263,17 @@ def _render_3d_podium(top: pd.DataFrame):
     ))
     fig.update_layout(
         template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", showlegend=False,
-        height=560, margin=dict(l=0, r=0, t=10, b=0),
+        height=520, margin=dict(l=0, r=0, t=10, b=0),
         scene=dict(
             xaxis=dict(visible=False), yaxis=dict(visible=False),
             zaxis=dict(title="Win %", color=PALETTE["muted"],
                        gridcolor=PALETTE["grid"], backgroundcolor="rgba(0,0,0,0)"),
             aspectmode="manual", aspectratio=dict(x=1.4, y=1.1, z=0.9),
-            camera=dict(eye=dict(x=1.7, y=1.7, z=0.85)),
+            camera=dict(eye=dict(x=1.6, y=1.6, z=1.1)),
+            dragmode="orbit",
         ),
     )
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, config=_CONFIG_3D, width="stretch")
 
 
 def _render_groups_overview():
@@ -471,7 +489,7 @@ def page_odds():
         final = None
         for done, df in simulate.monte_carlo_stream(engine, n, batches=24):
             final = df
-            chart_ph.plotly_chart(_odds_bar(df.head(14), height=520), width="stretch")
+            chart_ph.plotly_chart(_odds_bar(df.head(14), height=520), config=_CONFIG_2D, width="stretch")
             prog.progress(done / n, text=f"{done:,} / {n:,} tournaments")
         prog.empty()
         chart_ph.empty()
@@ -487,7 +505,7 @@ def page_odds():
     view = st.radio("View", ["Leaderboard", "3D podium"], horizontal=True,
                     label_visibility="collapsed")
     if view == "Leaderboard":
-        st.plotly_chart(_odds_bar(mc.head(20), height=640), width="stretch")
+        st.plotly_chart(_odds_bar(mc.head(20), height=640), config=_CONFIG_2D, width="stretch")
     else:
         _render_3d_podium(mc)
 
@@ -547,7 +565,7 @@ def page_match():
     fig.update_layout(coloraxis_showscale=False)
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(showgrid=False)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, config=_CONFIG_2D, width="stretch")
 
 
 def page_how():
@@ -639,7 +657,7 @@ def render_admin():
                      color_continuous_scale=WC_SCALE)
         fig.update_layout(coloraxis_showscale=False, xaxis_title="", yaxis_title="clicks")
         _style_fig(fig, height=360)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, config=_CONFIG_2D, width="stretch")
         
         st.subheader("Session Details")
         display_df = df[[

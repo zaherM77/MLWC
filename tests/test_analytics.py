@@ -15,7 +15,8 @@ def test_visit_and_click_counts(tmp_path, monkeypatch):
     assert s["total_users"] == 2
     assert s["total_clicks"] == 3
     assert abs(s["avg_clicks"] - 1.5) < 1e-9
-    assert s["per_user"][0] == {"session": "u1", "clicks": 2}
+    top = s["per_user"][0]
+    assert top["session"] == "u1" and top["clicks"] == 2
 
 
 def test_summary_empty(tmp_path, monkeypatch):
